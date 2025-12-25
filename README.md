@@ -303,7 +303,7 @@ Train BC on the generated manipulation dataset:
 
 ---
 
-### 5) Generate locomanipulation SDG dataset (walk + manipulate)
+### 5) Visualize the M3PO model (walk + manipulate)
 
 Now generate the navigation+manipulation dataset for your env:
 
@@ -311,7 +311,7 @@ Now generate the navigation+manipulation dataset for your env:
 * **Input dataset**: `generated_dataset_g1_locomanip.hdf5`
 
 ```bash
-./isaaclab.sh -p scripts/imitation_learning/locomanipulation_sdg/generate_data.py \
+./isaaclab.sh -p scripts/reinforcement_learning/m3po/play.py \
   --device cpu \
   --kit_args="--enable isaacsim.replicator.mobility_gen" \
   --task="Isaac-G1-SteeringWheel-Locomanipulation" \
@@ -338,7 +338,7 @@ If generation fails or looks odd, these two values are the first things to tune.
 Plot trajectories for quick debugging:
 
 ```bash
-./isaaclab.sh -p scripts/imitation_learning/locomanipulation_sdg/plot_navigation_trajectory.py \
+./isaaclab.sh -p scripts/reinforcement_learning/m3po/plot_navigation_trajectory.py \
   --input_file ./datasets/generated_dataset_g1_locomanipulation_sdg.hdf5 \
   --output_dir /tmp/g1_nav_plots
 ```
