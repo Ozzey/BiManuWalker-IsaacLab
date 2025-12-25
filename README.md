@@ -64,78 +64,323 @@ dependency versions for Isaac Sim.
 | `v2.0.X`                      | Isaac Sim 4.5             |
 
 
-## Contributing to Isaac Lab
+## BIMANUAL-MANIPULATION PIPELINE
 
-We wholeheartedly welcome contributions from the community to make this framework mature and useful for everyone.
-These may happen as bug reports, feature requests, or code contributions. For details, please check our
-[contribution guidelines](https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html).
+# G1 Steering-Wheel Locomanipulation (IsaacLab)  
+**End-to-end Mimic + Robomimic pipeline (datasets → BC → locomanip SDG)**
 
-## Show & Tell: Share Your Inspiration
+This repo/workspace guide shows the exact sequence of commands to:
+1) collect (optional) teleop demos,  
+2) annotate + expand them into a large **manipulation-only** dataset using **IsaacLab Mimic**,  
+3) train a **behavior cloning (BC)** policy using **Robomimic**, and  
+4) generate a **locomanipulation (navigation + manipulation)** dataset for the **G1 steering-wheel locomanipulation** environment (`Isaac-G1-SteeringWheel-Locomanipulation`).
 
-We encourage you to utilize our [Show & Tell](https://github.com/isaac-sim/IsaacLab/discussions/categories/show-and-tell)
-area in the `Discussions` section of this repository. This space is designed for you to:
+---
 
-* Share the tutorials you've created
-* Showcase your learning content
-* Present exciting projects you've developed
+## Table of Contents
+- [What you get](#what-you-get)
+- [Prerequisites](#prerequisites)
+- [Project layout](#project-layout)
+- [Quickstart](#quickstart)
+- [Step-by-step](#step-by-step)
+  - [1) Record manipulation demos (optional)](#1-record-manipulation-demos-optional)
+  - [2) Annotate demos for Mimic](#2-annotate-demos-for-mimic)
+  - [3) Generate a large manipulation dataset (Mimic SDG)](#3-generate-a-large-manipulation-dataset-mimic-sdg)
+  - [4) Train a manipulation-only BC policy (Robomimic)](#4-train-a-manipulation-only-bc-policy-robomimic)
+  - [5) Generate locomanipulation SDG dataset (walk + manipulate)](#5-generate-locomanipulation-sdg-dataset-walk--manipulate)
+  - [6) Inspect navigation trajectories](#6-inspect-navigation-trajectories)
+- [Common issues](#common-issues)
+- [Outputs](#outputs)
 
-By sharing your work, you'll inspire others and contribute to the collective knowledge
-of our community. Your contributions can spark new ideas and collaborations, fostering
-innovation in robotics and simulation.
+---
 
-## Troubleshooting
+## What you get
 
-Please see the [troubleshooting](https://isaac-sim.github.io/IsaacLab/main/source/refs/troubleshooting.html) section for
-common fixes or [submit an issue](https://github.com/isaac-sim/IsaacLab/issues).
+After completing the pipeline you will have:
 
-For issues related to Isaac Sim, we recommend checking its [documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html)
-or opening a question on its [forums](https://forums.developer.nvidia.com/c/agx-autonomous-machines/isaac/67).
+- `generated_dataset_g1_locomanip.hdf5`  
+  ✅ Large manipulation-only dataset (standing at table)
 
-## Support
+- Robomimic checkpoints (`*.pth`)  
+  ✅ Manipulation-only BC policy you can roll out in the manipulation task
 
-* Please use GitHub [Discussions](https://github.com/isaac-sim/IsaacLab/discussions) for discussing ideas,
-  asking questions, and requests for new features.
-* Github [Issues](https://github.com/isaac-sim/IsaacLab/issues) should only be used to track executable pieces of
-  work with a definite scope and a clear deliverable. These can be fixing bugs, documentation issues, new features,
-  or general updates.
+- `generated_dataset_g1_locomanipulation_sdg.hdf5`  
+  ✅ Locomanipulation dataset (navigation + manipulation) built from the manipulation dataset
 
-## Connect with the NVIDIA Omniverse Community
+---
 
-Do you have a project or resource you'd like to share more widely? We'd love to hear from you!
-Reach out to the NVIDIA Omniverse Community team at OmniverseCommunity@nvidia.com to explore opportunities
-to spotlight your work.
+## Prerequisites
 
-You can also join the conversation on the [Omniverse Discord](https://discord.com/invite/nvidiaomniverse) to
-connect with other developers, share your projects, and help grow a vibrant, collaborative ecosystem
-where creativity and technology intersect. Your contributions can make a meaningful impact on the Isaac Lab
-community and beyond!
-
-## License
-
-The Isaac Lab framework is released under [BSD-3 License](LICENSE). The `isaaclab_mimic` extension and its
-corresponding standalone scripts are released under [Apache 2.0](LICENSE-mimic). The license files of its
-dependencies and assets are present in the [`docs/licenses`](docs/licenses) directory.
-
-Note that Isaac Lab requires Isaac Sim, which includes components under proprietary licensing terms. Please see the [Isaac Sim license](docs/licenses/dependencies/isaacsim-license.txt) for information on Isaac Sim licensing.
-
-Note that the `isaaclab_mimic` extension requires cuRobo, which has proprietary licensing terms that can be found in [`docs/licenses/dependencies/cuRobo-license.txt`](docs/licenses/dependencies/cuRobo-license.txt).
+- IsaacLab installed and runnable via `./isaaclab.sh`
+- Linux dependencies:
+  ```bash
+  sudo apt update
+  sudo apt install -y cmake build-essential
+  ```
 
 
-## Citation
 
-If you use Isaac Lab in your research, please cite the technical report:
+* Optional but recommended:
 
+  * `--enable_pinocchio` for better kinematics/IK stack
+  * GPU supported; CPU also works (slower)
+
+> **Important:** All commands below assume you run from the IsaacLab root folder.
+
+---
+
+## Project layout
+
+Create a datasets directory in your IsaacLab root:
+
+```text
+IsaacLab/
+├─ isaaclab.sh
+├─ scripts/
+│  ├─ tools/
+│  └─ imitation_learning/
+└─ datasets/
+   ├─ dataset_g1_locomanip.hdf5
+   ├─ dataset_annotated_g1_locomanip.hdf5
+   ├─ generated_dataset_g1_locomanip.hdf5
+   └─ generated_dataset_g1_locomanipulation_sdg.hdf5
 ```
-@article{mittal2025isaaclab,
-  title={Isaac Lab: A GPU-Accelerated Simulation Framework for Multi-Modal Robot Learning},
-  author={Mayank Mittal and Pascal Roth and James Tigue and Antoine Richard and Octi Zhang and Peter Du and Antonio Serrano-Muñoz and Xinjie Yao and René Zurbrügg and Nikita Rudin and Lukasz Wawrzyniak and Milad Rakhsha and Alain Denzler and Eric Heiden and Ales Borovicka and Ossama Ahmed and Iretiayo Akinola and Abrar Anwar and Mark T. Carlson and Ji Yuan Feng and Animesh Garg and Renato Gasoto and Lionel Gulich and Yijie Guo and M. Gussert and Alex Hansen and Mihir Kulkarni and Chenran Li and Wei Liu and Viktor Makoviychuk and Grzegorz Malczyk and Hammad Mazhar and Masoud Moghani and Adithyavairavan Murali and Michael Noseworthy and Alexander Poddubny and Nathan Ratliff and Welf Rehberg and Clemens Schwarke and Ritvik Singh and James Latham Smith and Bingjie Tang and Ruchik Thaker and Matthew Trepte and Karl Van Wyk and Fangzhou Yu and Alex Millane and Vikram Ramasamy and Remo Steiner and Sangeeta Subramanian and Clemens Volk and CY Chen and Neel Jawale and Ashwin Varghese Kuruttukulam and Michael A. Lin and Ajay Mandlekar and Karsten Patzwaldt and John Welsh and Huihua Zhao and Fatima Anes and Jean-Francois Lafleche and Nicolas Moënne-Loccoz and Soowan Park and Rob Stepinski and Dirk Van Gelder and Chris Amevor and Jan Carius and Jumyung Chang and Anka He Chen and Pablo de Heras Ciechomski and Gilles Daviet and Mohammad Mohajerani and Julia von Muralt and Viktor Reutskyy and Michael Sauter and Simon Schirm and Eric L. Shi and Pierre Terdiman and Kenny Vilella and Tobias Widmer and Gordon Yeoman and Tiffany Chen and Sergey Grizan and Cathy Li and Lotus Li and Connor Smith and Rafael Wiltz and Kostas Alexis and Yan Chang and David Chu and Linxi "Jim" Fan and Farbod Farshidian and Ankur Handa and Spencer Huang and Marco Hutter and Yashraj Narang and Soha Pouya and Shiwei Sheng and Yuke Zhu and Miles Macklin and Adam Moravanszky and Philipp Reist and Yunrong Guo and David Hoeller and Gavriel State},
-  journal={arXiv preprint arXiv:2511.04831},
-  year={2025},
-  url={https://arxiv.org/abs/2511.04831}
-}
+
+---
+
+## Quickstart
+
+If you already have `dataset_annotated_g1_locomanip.hdf5` in `./datasets/`:
+
+```bash
+cd /home/jacob/Desktop/Projects/IsaacLab
+mkdir -p datasets
+
+# (A) generate large manipulation dataset
+./isaaclab.sh -p scripts/imitation_learning/isaaclab_mimic/generate_dataset.py \
+  --device cpu \
+  --headless \
+  --num_envs 20 \
+  --generation_num_trials 1000 \
+  --enable_pinocchio \
+  --input_file ./datasets/dataset_annotated_g1_locomanip.hdf5 \
+  --output_file ./datasets/generated_dataset_g1_locomanip.hdf5
+
+# (B) train BC policy
+./isaaclab.sh -i robomimic
+./isaaclab.sh -p scripts/imitation_learning/robomimic/train.py \
+  --task Isaac-PickPlace-Locomanipulation-G1-Abs-v0 \
+  --algo bc \
+  --normalize_training_actions \
+  --dataset ./datasets/generated_dataset_g1_locomanip.hdf5
+
+# (C) generate locomanipulation dataset (nav + manipulation)
+./isaaclab.sh -p scripts/imitation_learning/locomanipulation_sdg/generate_data.py \
+  --device cpu \
+  --kit_args="--enable isaacsim.replicator.mobility_gen" \
+  --task="Isaac-G1-SteeringWheel-Locomanipulation" \
+  --dataset ./datasets/generated_dataset_g1_locomanip.hdf5 \
+  --num_runs 1 \
+  --lift_step 60 \
+  --navigate_step 130 \
+  --enable_pinocchio \
+  --output_file ./datasets/generated_dataset_g1_locomanipulation_sdg.hdf5 \
+  --enable_cameras
 ```
 
-## Acknowledgement
+---
 
-Isaac Lab development initiated from the [Orbit](https://isaac-orbit.github.io/) framework.
-We gratefully acknowledge the authors of Orbit for their foundational contributions.
+## Step-by-step
+
+### 0) Setup
+
+```bash
+cd /home/jacob/Desktop/Projects/IsaacLab   # <-- change to your IsaacLab root
+mkdir -p datasets
+```
+
+---
+
+### 1) Record manipulation demos (optional)
+
+Record a few XR hand-tracking demos with G1 at the table:
+
+```bash
+./isaaclab.sh -p scripts/tools/record_demos.py \
+  --device cpu \
+  --task Isaac-PickPlace-Locomanipulation-G1-Abs-v0 \
+  --teleop_device handtracking \
+  --dataset_file ./datasets/dataset_g1_locomanip.hdf5 \
+  --num_demos 5 \
+  --enable_pinocchio
+```
+
+Replay to sanity-check:
+
+```bash
+./isaaclab.sh -p scripts/tools/replay_demos.py \
+  --device cpu \
+  --task Isaac-PickPlace-Locomanipulation-G1-Abs-v0 \
+  --dataset_file ./datasets/dataset_g1_locomanip.hdf5 \
+  --enable_pinocchio
+```
+
+If you **don’t** want to record demos, skip to Step 3 using an existing annotated dataset.
+
+---
+
+### 2) Annotate demos for Mimic
+
+If you recorded your own dataset in Step 1, annotate it:
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/isaaclab_mimic/annotate_demos.py \
+  --device cpu \
+  --task Isaac-Locomanipulation-G1-Abs-Mimic-v0 \
+  --input_file ./datasets/dataset_g1_locomanip.hdf5 \
+  --output_file ./datasets/dataset_annotated_g1_locomanip.hdf5 \
+  --enable_pinocchio
+```
+
+---
+
+### 3) Generate a large manipulation dataset (Mimic SDG)
+
+Generate many successful manipulation demos (standing at table):
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/isaaclab_mimic/generate_dataset.py \
+  --device cpu \
+  --headless \
+  --num_envs 20 \
+  --generation_num_trials 1000 \
+  --enable_pinocchio \
+  --input_file ./datasets/dataset_annotated_g1_locomanip.hdf5 \
+  --output_file ./datasets/generated_dataset_g1_locomanip.hdf5
+```
+
+**Key knobs**
+
+* `--num_envs`: parallel generation environments
+* `--generation_num_trials`: number of successful trials to generate
+* `--headless`: faster, no GUI
+
+---
+
+### 4) Train a manipulation-only BC policy (Robomimic)
+
+Install Robomimic:
+
+```bash
+./isaaclab.sh -i robomimic
+```
+
+Train BC on the generated manipulation dataset:
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/robomimic/train.py \
+  --task Isaac-PickPlace-Locomanipulation-G1-Abs-v0 \
+  --algo bc \
+  --normalize_training_actions \
+  --dataset ./datasets/generated_dataset_g1_locomanip.hdf5
+```
+
+#### Evaluate / play a checkpoint
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/robomimic/play.py \
+  --device cpu \
+  --enable_pinocchio \
+  --task Isaac-PickPlace-Locomanipulation-G1-Abs-v0 \
+  --num_rollouts 50 \
+  --horizon 400 \
+  --norm_factor_min <NORM_FACTOR_MIN> \
+  --norm_factor_max <NORM_FACTOR_MAX> \
+  --checkpoint /PATH/TO/desired_model_checkpoint.pth
+```
+
+> `NORM_FACTOR_*` come from training output (normalization params).
+
+---
+
+### 5) Generate locomanipulation SDG dataset (walk + manipulate)
+
+Now generate the navigation+manipulation dataset for your env:
+
+* **Task**: `Isaac-G1-SteeringWheel-Locomanipulation`
+* **Input dataset**: `generated_dataset_g1_locomanip.hdf5`
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/locomanipulation_sdg/generate_data.py \
+  --device cpu \
+  --kit_args="--enable isaacsim.replicator.mobility_gen" \
+  --task="Isaac-G1-SteeringWheel-Locomanipulation" \
+  --dataset ./datasets/generated_dataset_g1_locomanip.hdf5 \
+  --num_runs 1 \
+  --lift_step 60 \
+  --navigate_step 130 \
+  --enable_pinocchio \
+  --output_file ./datasets/generated_dataset_g1_locomanipulation_sdg.hdf5 \
+  --enable_cameras
+```
+
+**How to pick `lift_step` and `navigate_step`**
+
+* `lift_step`: frame just after grasp + successful lift (object stable)
+* `navigate_step`: frame where the robot is ready to start walking while holding the object
+
+If generation fails or looks odd, these two values are the first things to tune.
+
+---
+
+### 6) Inspect navigation trajectories
+
+Plot trajectories for quick debugging:
+
+```bash
+./isaaclab.sh -p scripts/imitation_learning/locomanipulation_sdg/plot_navigation_trajectory.py \
+  --input_file ./datasets/generated_dataset_g1_locomanipulation_sdg.hdf5 \
+  --output_dir /tmp/g1_nav_plots
+```
+
+---
+
+## Common issues
+
+### `./isaaclab.sh: No such file or directory`
+
+You are not in the IsaacLab root. `cd` to the directory containing `isaaclab.sh`.
+
+### `--kit_args="--enable isaacsim.replicator.mobility_gen"` ignored / nav gen fails
+
+Ensure you used the exact `--kit_args` string. The locomanip SDG script depends on mobility gen being enabled.
+
+### Low SDG success rate
+
+* Bad demo quality (unstable grasps, inconsistent timing)
+* `lift_step` / `navigate_step` misaligned
+* Try generating fewer trials first (e.g., 50–100) to iterate quickly
+
+### Pinocchio crashes
+
+* Temporarily remove `--enable_pinocchio` to isolate the issue
+* Confirm your IsaacLab environment has pinocchio installed/working
+
+---
+
+## Outputs
+
+Expected outputs in `./datasets/`:
+
+* `dataset_g1_locomanip.hdf5` (optional; recorded demos)
+* `dataset_annotated_g1_locomanip.hdf5` (annotated demos)
+* `generated_dataset_g1_locomanip.hdf5` (large manipulation dataset)
+* `generated_dataset_g1_locomanipulation_sdg.hdf5` (locomanip dataset)
+
+Robomimic training outputs:
+
+* a run directory with logs and model checkpoints (`*.pth`)
+* normalization parameters used by `play.py`
+
+
+
